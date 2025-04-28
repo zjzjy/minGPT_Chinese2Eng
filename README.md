@@ -1,147 +1,132 @@
+# 中英文神经机器翻译系统
 
-# minGPT
+基于minGPT的中文到英文(Chinese-to-English)神经机器翻译系统，使用小型GPT模型实现序列到序列的翻译任务。
 
-![mingpt](mingpt.jpg)
+## 功能概述
 
-A PyTorch re-implementation of [GPT](https://github.com/openai/gpt-2), both training and inference. minGPT tries to be small, clean, interpretable and educational, as most of the currently available GPT model implementations can a bit sprawling. GPT is not a complicated model and this implementation is appropriately about 300 lines of code (see [mingpt/model.py](mingpt/model.py)). All that's going on is that a sequence of indices feeds into a [Transformer](https://arxiv.org/abs/1706.03762), and a probability distribution over the next index in the sequence comes out. The majority of the complexity is just being clever with batching (both across examples and over sequence length) for efficiency.
+`chinese_english_translator.py`实现了一个完整的中英文翻译流水线，包括：
 
-**note (Jan 2023)**: though I may continue to accept and change some details, minGPT is in a semi-archived state. For more recent developments see my rewrite [nanoGPT](https://github.com/karpathy/nanoGPT). Basically, minGPT became referenced across a wide variety of places (notebooks, blogs, courses, books, etc.) which made me less willing to make the bigger changes I wanted to make to move the code forward. I also wanted to change the direction a bit, from a sole focus on education to something that is still simple and hackable but has teeth (reproduces medium-sized industry benchmarks, accepts some tradeoffs to gain runtime efficiency, etc).
+- 加载中英文平行语料库并进行预处理
+- 训练一个小型GPT模型(gpt-nano)进行翻译
+- 实现训练过程可视化(损失曲线)
+- 翻译结果表格展示与评估
+- 模型注意力机制可视化
 
-The minGPT library is three files: [mingpt/model.py](mingpt/model.py) contains the actual Transformer model definition, [mingpt/bpe.py](mingpt/bpe.py) contains a mildly refactored Byte Pair Encoder that translates between text and sequences of integers exactly like OpenAI did in GPT, [mingpt/trainer.py](mingpt/trainer.py) is (GPT-independent) PyTorch boilerplate code that trains the model. Then there are a number of demos and projects that use the library in the `projects` folder:
+## 环境要求
 
-- `projects/adder` trains a GPT from scratch to add numbers (inspired by the addition section in the GPT-3 paper)
-- `projects/chargpt` trains a GPT to be a character-level language model on some input text file
-- `demo.ipynb` shows a minimal usage of the `GPT` and `Trainer` in a notebook format on a simple sorting example
-- `generate.ipynb` shows how one can load a pretrained GPT2 and generate text given some prompt
+本项目依赖于minGPT框架，需要以下环境：
 
-### Library Installation
+- Python 3.6+
+- PyTorch 1.7+
+- matplotlib
+- seaborn
+- pandas
+- minGPT库（需要先克隆并安装）
 
-If you want to `import mingpt` into your project:
+## 安装指南
 
-```
+1. 克隆minGPT仓库：
+```bash
 git clone https://github.com/karpathy/minGPT.git
 cd minGPT
+```
+
+2. 安装minGPT及依赖：
+```bash
 pip install -e .
+pip install matplotlib seaborn pandas
 ```
 
-### Usage
+3. 将`chinese_english_translator.py`放在minGPT目录下
 
-Here's how you'd instantiate a GPT-2 (124M param version):
+4. 确保数据文件`cmn.txt`位于正确位置（默认在当前目录或`cmn-eng/`目录下）
 
-```python
-from mingpt.model import GPT
-model_config = GPT.get_default_config()
-model_config.model_type = 'gpt2'
-model_config.vocab_size = 50257 # openai's model vocabulary
-model_config.block_size = 1024  # openai's model block_size (i.e. input context length)
-model = GPT(model_config)
+## 使用方法
+
+直接运行脚本启动训练和评估过程：
+
+```bash
+python chinese_english_translator.py
 ```
 
-And here's how you'd train it:
+可选参数可以通过修改代码中的配置对象设置，如：
+- 模型大小：更改`config.model.model_type`（默认为'gpt-nano'）
+- 训练轮数：更改`max_epochs`和`max_iters`变量
+- 学习率：更改`config.trainer.learning_rate`
 
-```python
-# your subclass of torch.utils.data.Dataset that emits example
-# torch LongTensor of lengths up to 1024, with integers from [0,50257)
-train_dataset = YourDataset()
+## 数据格式
 
-from mingpt.trainer import Trainer
-train_config = Trainer.get_default_config()
-train_config.learning_rate = 5e-4 # many possible options, see the file
-train_config.max_iters = 1000
-train_config.batch_size = 32
-trainer = Trainer(train_config, model, train_dataset)
-trainer.run()
+输入数据文件（cmn.txt）格式为制表符分隔的英文和中文对应句子：
+```
+English sentence    中文句子    其他信息(可选)
 ```
 
-See `demo.ipynb` for a more concrete example.
+## 数据处理
 
-### Unit tests
+系统对数据的处理流程如下：
 
-Coverage is not super amazing just yet but:
+1. **数据加载与划分**：
+   - 从cmn.txt读取中英文对照语料
+   - 按9:1比例自动划分为训练集和验证集
+   - 支持从命令行参数指定其他数据路径
 
-```
-python -m unittest discover tests
-```
+2. **字符级处理**：
+   - 系统采用字符级别处理，不进行额外分词
+   - 对所有出现的字符创建词汇表（vocabulary）
+   - 为每个字符分配唯一的整数ID
 
-### todos
+3. **特殊标记处理**：
+   - `<PAD>`：用于序列填充，使批处理中所有序列长度相同
+   - `< SOS >`：序列起始标记，表示翻译开始
+   - `<SEP>`：分隔符，用于分隔中文输入和英文输出
+   - `<EOS>`：序列结束标记，表示翻译结束
 
-- add gpt-2 finetuning demo on arbitrary given text file
-- add dialog agent demo
-- better docs of outcomes for existing projects (adder, chargpt)
-- add mixed precision and related training scaling goodies
-- distributed training support
-- reproduce some benchmarks in projects/, e.g. text8 or other language modeling
-- proper logging instead of print statement amateur hour haha
-- i probably should have a requirements.txt file...
-- it should be possible to load in many other model weights other than just gpt2-\*
+4. **序列构建**：
+   - 每个翻译对被构建为特定格式：`< SOS > 中文文本 <SEP> 英文文本 <EOS>`
+   - 将字符序列转换为对应整数索引序列
+   - 截断超过最大长度(block_size)的序列
 
-### References
+5. **训练目标生成**：
+   - 输入(X)为：整个序列去掉最后一个字符
+   - 目标(Y)为：整个序列去掉第一个字符
+   - 使用掩码机制，只计算`<SEP>`后部分（英文部分）的损失
+   - 在批处理中对序列进行填充（padding）处理
 
-Code:
+6. **批处理处理**：
+   - 使用自定义`collate_batch`函数处理不同长度序列
+   - 使用`<PAD>`标记填充每个批次中的序列到相同长度
+   - 为损失计算创建掩码，忽略填充部分
 
-- [openai/gpt-2](https://github.com/openai/gpt-2) has the model definition in TensorFlow, but not the training code
-- [openai/image-gpt](https://github.com/openai/image-gpt) has some more modern gpt-3 like modification in its code, good reference as well
-- [huggingface/transformers](https://github.com/huggingface/transformers) has a [language-modeling example](https://github.com/huggingface/transformers/tree/master/examples/pytorch/language-modeling). It is full-featured but as a result also somewhat challenging to trace. E.g. some large functions have as much as 90% unused code behind various branching statements that is unused in the default setting of simple language modeling
+这种数据处理方式使模型能够学习根据中文输入生成对应的英文翻译，同时处理了变长序列和批处理的技术挑战。
 
-Papers + some implementation notes:
+## 输出结果
 
-#### Improving Language Understanding by Generative Pre-Training (GPT-1)
+运行后，程序将在`./out/chinese_english_translator/`目录下生成以下内容：
 
-- Our model largely follows the original transformer work
-- We trained a 12-layer decoder-only transformer with masked self-attention heads (768 dimensional states and 12 attention heads). For the position-wise feed-forward networks, we used 3072 dimensional inner states.
-- Adam max learning rate of 2.5e-4. (later GPT-3 for this model size uses 6e-4)
-- LR decay: increased linearly from zero over the first 2000 updates and annealed to 0 using a cosine schedule
-- We train for 100 epochs on minibatches of 64 randomly sampled, contiguous sequences of 512 tokens.
-- Since layernorm is used extensively throughout the model, a simple weight initialization of N(0, 0.02) was sufficient
-- bytepair encoding (BPE) vocabulary with 40,000 merges
-- residual, embedding, and attention dropouts with a rate of 0.1 for regularization.
-- modified version of L2 regularization proposed in (37), with w = 0.01 on all non bias or gain weights
-- For the activation function, we used the Gaussian Error Linear Unit (GELU).
-- We used learned position embeddings instead of the sinusoidal version proposed in the original work
-- For finetuning: We add dropout to the classifier with a rate of 0.1. learning rate of 6.25e-5 and a batchsize of 32. 3 epochs. We use a linear learning rate decay schedule with warmup over 0.2% of training. λ was set to 0.5.
-- GPT-1 model is 12 layers and d_model 768, ~117M params
+- `model.pt`：训练好的模型权重
+- `loss_curve.png`：训练损失曲线图
+- `translation_results.csv`：翻译结果表格（CSV格式）
+- `translation_results.png`：翻译结果表格（图片格式）
+- `attention_maps/`：注意力可视化图像（如果成功）
 
-#### Language Models are Unsupervised Multitask Learners (GPT-2)
+## 技术实现
 
-- LayerNorm was moved to the input of each sub-block, similar to a pre-activation residual network
-- an additional layer normalization was added after the final self-attention block.
-- modified initialization which accounts for the accumulation on the residual path with model depth is used. We scale the weights of residual layers at initialization by a factor of 1/√N where N is the number of residual layers. (weird because in their released code i can only find a simple use of the old 0.02... in their release of image-gpt I found it used for c_proj, and even then only for attn, not for mlp. huh. https://github.com/openai/image-gpt/blob/master/src/model.py)
-- the vocabulary is expanded to 50,257
-- increase the context size from 512 to 1024 tokens
-- larger batchsize of 512 is used
-- GPT-2 used 48 layers and d_model 1600 (vs. original 12 layers and d_model 768). ~1.542B params
+本项目使用了以下技术：
 
-#### Language Models are Few-Shot Learners (GPT-3)
+- **模型架构**：基于GPT（生成预训练Transformer）的自回归语言模型
+- **特殊标记**：使用`< SOS >`、`<SEP>`、`<EOS>`标记来分隔输入和输出序列
+- **批处理**：自定义批处理逻辑以处理不同长度的序列
+- **掩码机制**：在损失计算中使用掩码，只关注从中文生成英文的部分
 
-- GPT-3: 96 layers, 96 heads, with d_model of 12,288 (175B parameters).
-- GPT-1-like: 12 layers, 12 heads, d_model 768 (125M)
-- We use the same model and architecture as GPT-2, including the modified initialization, pre-normalization, and reversible tokenization described therein
-- we use alternating dense and locally banded sparse attention patterns in the layers of the transformer, similar to the Sparse Transformer
-- we always have the feedforward layer four times the size of the bottleneck layer, dff = 4 ∗ dmodel
-- all models use a context window of nctx = 2048 tokens.
-- Adam with β1 = 0.9, β2 = 0.95, and eps = 10−8
-- All models use weight decay of 0.1 to provide a small amount of regularization. (NOTE: GPT-1 used 0.01 I believe, see above)
-- clip the global norm of the gradient at 1.0
-- Linear LR warmup over the first 375 million tokens. Then use cosine decay for learning rate down to 10% of its value, over 260 billion tokens.
-- gradually increase the batch size linearly from a small value (32k tokens) to the full value over the first 4-12 billion tokens of training, depending on the model size.
-- full 2048-sized time context window is always used, with a special END OF DOCUMENT token delimiter
+## 可能的改进
 
-#### Generative Pretraining from Pixels (Image GPT)
+- 使用更大的模型如`gpt-mini`或`gpt-micro`提高翻译质量
+- 添加中文分词预处理
+- 实现基于Beam Search的解码策略
+- 增加BLEU等评估指标
+- 修复注意力可视化功能
+- 添加对中文字体的支持以优化可视化效果
 
-- When working with images, we pick the identity permutation πi = i for 1 ≤ i ≤ n, also known as raster order.
-- we create our own 9-bit color palette by clustering (R, G, B) pixel values using k-means with k = 512.
-- Our largest model, iGPT-XL, contains L = 60 layers and uses an embedding size of d = 3072 for a total of 6.8B parameters.
-- Our next largest model, iGPT-L, is essentially identical to GPT-2 with L = 48 layers, but contains a slightly smaller embedding size of d = 1536 (vs 1600) for a total of 1.4B parameters.
-- We use the same model code as GPT-2, except that we initialize weights in the layerdependent fashion as in Sparse Transformer (Child et al., 2019) and zero-initialize all projections producing logits.
-- We also train iGPT-M, a 455M parameter model with L = 36 and d = 1024
-- iGPT-S, a 76M parameter model with L = 24 and d = 512 (okay, and how many heads? looks like the Github code claims 8)
-- When pre-training iGPT-XL, we use a batch size of 64 and train for 2M iterations, and for all other models we use a batch size of 128 and train for 1M iterations.
-- Adam with β1 = 0.9 and β2 = 0.95
-- The learning rate is warmed up for one epoch, and then decays to 0
-- We did not use weight decay because applying a small weight decay of 0.01 did not change representation quality.
-- iGPT-S lr 0.003
-- No dropout is used.
+## 许可证
 
-### License
-
-MIT
+本项目遵循与原始minGPT库相同的MIT许可。 
